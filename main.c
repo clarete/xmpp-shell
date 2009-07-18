@@ -295,6 +295,21 @@ disable_widgets (XsCtx *ctx)
   return FALSE;
 }
 
+int reply_handler(xmpp_conn_t * const conn,
+                  xmpp_stanza_t * const stanza,
+                  void * const userdata)
+{
+  char *text;
+  size_t len;
+  GtkTextBuffer *buffer;
+  XsCtx *ctx = (XsCtx *) userdata;
+  xmpp_stanza_to_text (stanza, &text, &len);
+  buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (ctx->ui->receive));
+  gtk_text_buffer_set_text (buffer, text, len);
+  g_free (text);
+  return 1;
+}
+
 static void conn_handler(xmpp_conn_t * const conn,
                          const xmpp_conn_event_t status,
                          const int error,
@@ -304,6 +319,7 @@ static void conn_handler(xmpp_conn_t * const conn,
     {
       XsCtx *ctx = (XsCtx *) userdata;
       g_idle_add ((GSourceFunc) enable_widgets, ctx);
+      xmpp_handler_add (ctx->conn, reply_handler, NULL, NULL, NULL, ctx);
     }
 }
 
