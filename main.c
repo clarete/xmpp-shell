@@ -234,6 +234,8 @@ setup_ui (XsCtx *ctx)
                                   GTK_POLICY_AUTOMATIC);
   buff = gtk_source_buffer_new_with_language (lang);
   ctx->ui->send = gtk_source_view_new_with_buffer (buff);
+  gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (ctx->ui->send),
+                               GTK_WRAP_WORD);
   gtk_container_add (GTK_CONTAINER (sw), ctx->ui->send);
 
   /* Receive textview */
@@ -246,6 +248,8 @@ setup_ui (XsCtx *ctx)
                                   GTK_POLICY_AUTOMATIC);
   buff1 = gtk_source_buffer_new_with_language (lang);
   ctx->ui->receive = gtk_source_view_new_with_buffer (buff1);
+  gtk_text_view_set_wrap_mode (GTK_TEXT_VIEW (ctx->ui->receive),
+                               GTK_WRAP_WORD);
   gtk_text_view_set_editable (GTK_TEXT_VIEW (ctx->ui->receive), FALSE);
   gtk_container_add (GTK_CONTAINER (sw2), ctx->ui->receive);
 
