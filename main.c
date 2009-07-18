@@ -18,6 +18,7 @@
 
 #include <gtk/gtk.h>
 #include <gtksourceview/gtksourceview.h>
+#include <gtksourceview/gtksourcelanguagemanager.h>
 #include <strophe.h>
 
 #define _(x) x
@@ -51,6 +52,8 @@ typedef struct _XsCtx {
 static void connect (XsCtx *ctx);
 static void reconnect (XsCtx *ctx);
 static void send (XsCtx *ctx);
+static gboolean enable_widgets (XsCtx *ctx);
+static gboolean disable_widgets (XsCtx *ctx);
 
 static int
 quit (GtkWidget *widget, GdkEvent *event, XsCtx *ctx) {
@@ -200,6 +203,9 @@ setup_ui (XsCtx *ctx)
   GtkWidget *vbox;
   GtkWidget *sw, *sw2;
   GtkWidget *vpaned;
+  GtkSourceBuffer *buff, *buff1;
+  GtkSourceLanguageManager *langmanager;
+  GtkSourceLanguage *lang;
 
   /* Main window and vbox */
 
@@ -217,14 +223,17 @@ setup_ui (XsCtx *ctx)
 
   /* Send source view */
 
+  langmanager = gtk_source_language_manager_get_default ();
+  lang = gtk_source_language_manager_get_language (langmanager, "xml");
+
   sw = gtk_scrolled_window_new (NULL, NULL);
   gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (sw),
                                        GTK_SHADOW_IN);
   gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (sw),
                                   GTK_POLICY_AUTOMATIC,
                                   GTK_POLICY_AUTOMATIC);
-  ctx->ui->send = gtk_source_view_new ();
-  gtk_widget_set_sensitive (ctx->ui->send, FALSE);
+  buff = gtk_source_buffer_new_with_language (lang);
+  ctx->ui->send = gtk_source_view_new_with_buffer (buff);
   gtk_container_add (GTK_CONTAINER (sw), ctx->ui->send);
 
   /* Receive textview */
@@ -235,8 +244,8 @@ setup_ui (XsCtx *ctx)
   gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (sw2),
                                   GTK_POLICY_AUTOMATIC,
                                   GTK_POLICY_AUTOMATIC);
-  ctx->ui->receive = gtk_source_view_new ();
-  gtk_widget_set_sensitive (ctx->ui->receive, FALSE);
+  buff1 = gtk_source_buffer_new_with_language (lang);
+  ctx->ui->receive = gtk_source_view_new_with_buffer (buff1);
   gtk_text_view_set_editable (GTK_TEXT_VIEW (ctx->ui->receive), FALSE);
   gtk_container_add (GTK_CONTAINER (sw2), ctx->ui->receive);
 
@@ -252,21 +261,38 @@ setup_ui (XsCtx *ctx)
   if (ctx->passwd_str != NULL)
     gtk_entry_set_text (GTK_ENTRY (ctx->ui->passwd), ctx->passwd_str);
 
+  disable_widgets (ctx);
   gtk_widget_show_all (ctx->ui->window);
 }
 
-static void
+static gboolean
 enable_widgets (XsCtx *ctx)
 {
+  GtkToolbar *tb;
+  gint len, i;
   gtk_widget_set_sensitive (ctx->ui->send, TRUE);
   gtk_widget_set_sensitive (ctx->ui->receive, TRUE);
+  tb = GTK_TOOLBAR (ctx->ui->toolbar->toolbar);
+  len = gtk_toolbar_get_n_items (tb);
+  for (i = 0; i < len; i++)
+    gtk_widget_set_sensitive (GTK_WIDGET (gtk_toolbar_get_nth_item (tb, i)),
+                              TRUE);
+  return FALSE;
 }
 
-static void
+static gboolean
 disable_widgets (XsCtx *ctx)
 {
+  GtkToolbar *tb;
+  gint len, i;
   gtk_widget_set_sensitive (ctx->ui->send, FALSE);
   gtk_widget_set_sensitive (ctx->ui->receive, FALSE);
+  tb = GTK_TOOLBAR (ctx->ui->toolbar->toolbar);
+  len = gtk_toolbar_get_n_items (tb);
+  for (i = 0; i < len; i++)
+    gtk_widget_set_sensitive (GTK_WIDGET (gtk_toolbar_get_nth_item (tb, i)),
+                              FALSE);
+  return FALSE;
 }
 
 static void conn_handler(xmpp_conn_t * const conn,
