@@ -17,6 +17,7 @@
  */
 
 #include <gtk/gtk.h>
+#include <gtksourceview/gtksourceview.h>
 #include <strophe.h>
 
 typedef struct _UiInfo {
