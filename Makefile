@@ -1,7 +1,7 @@
 bin	:= xmpp-shell
 src	:= main.c
 objs	:= $(src:%.c=%.o)
-pkgs	:= gthread-2.0 gtk+-2.0 libstrophe gtksourceview-2.0
+pkgs	:= gthread-2.0 gtk+-3.0 gtksourceview-3.0 libstrophe
 ldflags	:= $(shell pkg-config --libs $(pkgs))
 cflags	:= $(shell pkg-config --cflags $(pkgs)) -Wall
 
@@ -10,5 +10,5 @@ cflags	:= $(shell pkg-config --cflags $(pkgs)) -Wall
 $(bin): $(objs)
 	gcc -o $@ $(objs) $(ldflags)
 clean:
-	rm $(bin) $(objs)
+	-rm $(bin) $(objs)
 all: $(bin)

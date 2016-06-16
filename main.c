@@ -17,6 +17,7 @@
  */
 
 #include <gtk/gtk.h>
+#include <gtksourceview/gtksource.h>
 #include <gtksourceview/gtksourceview.h>
 #include <gtksourceview/gtksourcelanguagemanager.h>
 #include <strophe.h>
@@ -130,42 +131,50 @@ login_form (XsCtx *ctx)
   GtkWidget *hbox_jid, *hbox_passwd;
   GtkWidget *hbbox;
 
-  datavbox = gtk_vbox_new (FALSE, 4);
+  datavbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 4);
 
-  hbox_jid = gtk_hbox_new (FALSE, 0);
+  hbox_jid = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_box_pack_start (GTK_BOX (datavbox), hbox_jid, FALSE, FALSE, 0);
 
   label_jid = gtk_label_new ("JID:");
-  gtk_misc_set_alignment (GTK_MISC (label_jid), 0, 0.5);
-  gtk_widget_set_size_request (label_jid, 100, -1);
+  g_object_set (G_OBJECT (label_jid), "xalign", 0, NULL);
+  gtk_widget_set_size_request (label_jid, 110, -1);
   gtk_box_pack_start (GTK_BOX (hbox_jid), label_jid, FALSE, FALSE, 0);
 
   ctx->ui->jid = gtk_entry_new ();
   gtk_box_pack_start (GTK_BOX (hbox_jid), ctx->ui->jid, TRUE, TRUE, 0);
 
-  hbox_passwd = gtk_hbox_new (FALSE, 0);
+  hbox_passwd = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_box_pack_start (GTK_BOX (datavbox), hbox_passwd, FALSE, FALSE, 0);
 
   label_passwd = gtk_label_new ("Password:");
-  gtk_misc_set_alignment (GTK_MISC (label_passwd), 0, 0.5);
-  gtk_widget_set_size_request (label_passwd, 100, -1);
+  g_object_set (G_OBJECT (label_passwd), "xalign", 0, NULL);
+  gtk_widget_set_size_request (label_passwd, 110, -1);
   gtk_box_pack_start (GTK_BOX (hbox_passwd), label_passwd, FALSE, FALSE, 0);
 
   ctx->ui->passwd = gtk_entry_new ();
   gtk_entry_set_visibility (GTK_ENTRY (ctx->ui->passwd), FALSE);
   gtk_box_pack_start (GTK_BOX (hbox_passwd), ctx->ui->passwd, TRUE, TRUE, 0);
 
-  hbbox = gtk_hbutton_box_new ();
+  hbbox = gtk_button_box_new (GTK_ORIENTATION_HORIZONTAL);
   gtk_box_pack_start (GTK_BOX (datavbox), hbbox, FALSE, FALSE, 0);
   gtk_button_box_set_layout (GTK_BUTTON_BOX (hbbox), GTK_BUTTONBOX_END);
 
-  ctx->ui->connect_btn = gtk_button_new_from_stock (GTK_STOCK_CONNECT);
+  ctx->ui->connect_btn = gtk_button_new_with_label (_("Connect"));
   gtk_widget_set_sensitive (ctx->ui->connect_btn, FALSE);
   gtk_box_pack_start (GTK_BOX (hbbox), ctx->ui->connect_btn, FALSE, FALSE, 0);
   g_signal_connect_swapped (ctx->ui->connect_btn, "clicked",
                             G_CALLBACK (reconnect), ctx);
 
   return datavbox;
+}
+
+static GtkToolItem *
+toolitem (const gchar *icon_name, const gchar *label)
+{
+  GtkWidget *icon;
+  icon = gtk_image_new_from_icon_name (icon_name, GTK_ICON_SIZE_LARGE_TOOLBAR);
+  return gtk_tool_button_new (icon, label);
 }
 
 static GtkWidget *
@@ -177,18 +186,22 @@ toolbar_widget (XsCtx *ctx)
 
   ctx->ui->toolbar->toolbar = gtk_toolbar_new ();
 
-  ctx->ui->toolbar->undo = gtk_tool_button_new_from_stock (GTK_STOCK_UNDO);
+  ctx->ui->toolbar->undo = toolitem ("edit-undo", _("Undo"));
   gtk_toolbar_insert (GTK_TOOLBAR (ctx->ui->toolbar->toolbar),
                       ctx->ui->toolbar->undo, 0);
-  ctx->ui->toolbar->redo = gtk_tool_button_new_from_stock (GTK_STOCK_REDO);
+
+  ctx->ui->toolbar->redo = toolitem ("edit-redo", _("Redo"));
   gtk_toolbar_insert (GTK_TOOLBAR (ctx->ui->toolbar->toolbar),
                       ctx->ui->toolbar->redo, 1);
-  ctx->ui->toolbar->indent = gtk_tool_button_new_from_stock (GTK_STOCK_INDENT);
+
+  ctx->ui->toolbar->indent = toolitem ("format-indent-more", _("Indent"));
   gtk_toolbar_insert (GTK_TOOLBAR (ctx->ui->toolbar->toolbar),
                       ctx->ui->toolbar->indent, 2);
+
   sep = gtk_separator_tool_item_new ();
   gtk_toolbar_insert (GTK_TOOLBAR (ctx->ui->toolbar->toolbar), sep, 3);
-  ctx->ui->toolbar->send = gtk_tool_button_new_from_stock (GTK_STOCK_MEDIA_PLAY);
+
+  ctx->ui->toolbar->send = toolitem ("media-playback-start", _("Run"));
   gtk_toolbar_insert (GTK_TOOLBAR (ctx->ui->toolbar->toolbar),
                       ctx->ui->toolbar->send, 4);
   g_signal_connect_swapped (ctx->ui->toolbar->send, "clicked",
@@ -213,7 +226,7 @@ setup_ui (XsCtx *ctx)
   gtk_window_set_default_size (GTK_WINDOW (ctx->ui->window), 480, 380);
   gtk_container_set_border_width (GTK_CONTAINER (ctx->ui->window), 10);
   g_signal_connect (ctx->ui->window, "delete-event", G_CALLBACK (quit), ctx);
-  vbox = gtk_vbox_new (FALSE, 0);
+  vbox = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
   gtk_container_add (GTK_CONTAINER (ctx->ui->window), vbox);
 
   /* Some externaly defined widgets */
@@ -253,7 +266,7 @@ setup_ui (XsCtx *ctx)
   gtk_text_view_set_editable (GTK_TEXT_VIEW (ctx->ui->receive), FALSE);
   gtk_container_add (GTK_CONTAINER (sw2), ctx->ui->receive);
 
-  vpaned = gtk_vpaned_new ();
+  vpaned = gtk_paned_new (GTK_ORIENTATION_VERTICAL);
   gtk_paned_add1 (GTK_PANED (vpaned), sw);
   gtk_paned_add2 (GTK_PANED (vpaned), sw2);
   gtk_box_pack_start (GTK_BOX (vbox), vpaned, TRUE, TRUE, 0);
@@ -387,7 +400,6 @@ int
 main (int argc, char **argv)
 {
   XsCtx *ctx;
-  g_thread_init (NULL);
   gtk_init (&argc, &argv);
   xmpp_initialize ();
 
@@ -409,7 +421,7 @@ main (int argc, char **argv)
   g_signal_connect (ctx->ui->jid, "changed", G_CALLBACK (jid_changed), ctx);
   g_signal_connect (ctx->ui->passwd, "changed", G_CALLBACK (passwd_changed), ctx);
 
-  g_thread_create (run_xmpp_stuff, ctx, FALSE, NULL);
+  g_thread_new ("xmpp", run_xmpp_stuff, ctx);
   gtk_main ();
   return 0;
 }
