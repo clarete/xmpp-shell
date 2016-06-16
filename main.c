@@ -383,14 +383,34 @@ send (XsCtx *ctx)
     }
 }
 
+/* Copied from https://github.com/strophe/libstrophe/blob/master/src/ctx.c */
+static const char * const _xmpp_log_level_name[4] = {"DEBUG", "INFO", "WARN", "ERROR"};
+static const xmpp_log_level_t _xmpp_default_logger_levels[] = {XMPP_LEVEL_DEBUG,
+							       XMPP_LEVEL_INFO,
+							       XMPP_LEVEL_WARN,
+							       XMPP_LEVEL_ERROR};
+
+
+static void
+logger(void * const userdata,
+       const xmpp_log_level_t level,
+       const char * const area,
+       const char * const msg)
+{
+  xmpp_log_level_t filter_level = * (xmpp_log_level_t*)userdata;
+  if (level >= filter_level) {
+    fprintf(stderr, "%s: %s %s\n", area, _xmpp_log_level_name[level], msg);
+  }
+}
+
+static const xmpp_log_t log = {&logger, (void*)&_xmpp_default_logger_levels[XMPP_LEVEL_DEBUG]};
+
 static gpointer
 run_xmpp_stuff (gpointer userdata)
 {
-  xmpp_log_t *log;
   XsCtx *ctx;
   ctx = (XsCtx *) userdata;
-  log = xmpp_get_default_logger (XMPP_LEVEL_DEBUG);
-  ctx->xmpp = xmpp_ctx_new (NULL, log);
+  ctx->xmpp = xmpp_ctx_new (NULL, &log);
   connect (ctx);
   xmpp_run (ctx->xmpp);
   return GINT_TO_POINTER (1);
