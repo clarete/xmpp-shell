@@ -46,6 +46,7 @@ typedef struct _XsCtx {
   UiInfo *ui;
   char *jid_str;
   char *passwd_str;
+  xmpp_log_level_t log_level;
   xmpp_ctx_t *xmpp;
   xmpp_conn_t *conn;
 } XsCtx;
@@ -56,28 +57,11 @@ static void send (XsCtx *ctx);
 static gboolean enable_widgets (XsCtx *ctx);
 static gboolean disable_widgets (XsCtx *ctx);
 
+static gboolean running = TRUE;
+
 static int
 quit (GtkWidget *widget, GdkEvent *event, XsCtx *ctx) {
-  if (ctx->jid_str)
-    {
-      g_free (ctx->jid_str);
-      ctx->jid_str = NULL;
-    }
-
-  if (ctx->passwd_str)
-    {
-      g_free (ctx->passwd_str);
-      ctx->passwd_str = NULL;
-    }
-
-  gtk_main_quit ();
-  xmpp_stop (ctx->xmpp);
-  xmpp_shutdown();
-
-  if (ctx->ui)
-    g_slice_free (UiInfo, ctx->ui);
-  if (ctx)
-    g_slice_free (XsCtx, ctx);
+  running = FALSE;
   return TRUE;
 }
 
@@ -143,6 +127,8 @@ login_form (XsCtx *ctx)
 
   ctx->ui->jid = gtk_entry_new ();
   gtk_box_pack_start (GTK_BOX (hbox_jid), ctx->ui->jid, TRUE, TRUE, 0);
+  g_signal_connect (ctx->ui->jid, "changed",
+                    G_CALLBACK (jid_changed), ctx);
 
   hbox_passwd = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_box_pack_start (GTK_BOX (datavbox), hbox_passwd, FALSE, FALSE, 0);
@@ -155,6 +141,8 @@ login_form (XsCtx *ctx)
   ctx->ui->passwd = gtk_entry_new ();
   gtk_entry_set_visibility (GTK_ENTRY (ctx->ui->passwd), FALSE);
   gtk_box_pack_start (GTK_BOX (hbox_passwd), ctx->ui->passwd, TRUE, TRUE, 0);
+  g_signal_connect (ctx->ui->passwd, "changed",
+                    G_CALLBACK (passwd_changed), ctx);
 
   hbbox = gtk_button_box_new (GTK_ORIENTATION_HORIZONTAL);
   gtk_box_pack_start (GTK_BOX (datavbox), hbbox, FALSE, FALSE, 0);
@@ -267,8 +255,8 @@ setup_ui (XsCtx *ctx)
   gtk_container_add (GTK_CONTAINER (sw2), ctx->ui->receive);
 
   vpaned = gtk_paned_new (GTK_ORIENTATION_VERTICAL);
-  gtk_paned_add1 (GTK_PANED (vpaned), sw);
-  gtk_paned_add2 (GTK_PANED (vpaned), sw2);
+  gtk_paned_pack1 (GTK_PANED (vpaned), sw, TRUE, TRUE);
+  gtk_paned_pack2 (GTK_PANED (vpaned), sw2, TRUE, TRUE);
   gtk_box_pack_start (GTK_BOX (vbox), vpaned, TRUE, TRUE, 0);
 
   /* Setting entries stuff */
@@ -312,32 +300,13 @@ disable_widgets (XsCtx *ctx)
   return FALSE;
 }
 
-int reply_handler(xmpp_conn_t * const conn,
-                  xmpp_stanza_t * const stanza,
-                  void * const userdata)
-{
-  char *text;
-  size_t len;
-  GtkTextBuffer *buffer;
-  XsCtx *ctx = (XsCtx *) userdata;
-  xmpp_stanza_to_text (stanza, &text, &len);
-  buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (ctx->ui->receive));
-  gtk_text_buffer_set_text (buffer, text, len);
-  g_free (text);
-  return 1;
-}
-
 static void conn_handler(xmpp_conn_t * const conn,
                          const xmpp_conn_event_t status,
                          const int error,
                          xmpp_stream_error_t * const stream_error,
                          void * const userdata) {
   if (status == XMPP_CONN_CONNECT)
-    {
-      XsCtx *ctx = (XsCtx *) userdata;
-      g_idle_add ((GSourceFunc) enable_widgets, ctx);
-      xmpp_handler_add (ctx->conn, reply_handler, NULL, NULL, NULL, ctx);
-    }
+    enable_widgets ((XsCtx *) userdata);
 }
 
 static void
@@ -354,7 +323,7 @@ connect (XsCtx *ctx)
 static void
 reconnect (XsCtx *ctx)
 {
-  g_idle_add ((GSourceFunc) disable_widgets, ctx);
+  disable_widgets (ctx);
   if (ctx->conn)
     {
       xmpp_disconnect (ctx->conn);
@@ -383,43 +352,30 @@ send (XsCtx *ctx)
     }
 }
 
-/* Copied from https://github.com/strophe/libstrophe/blob/master/src/ctx.c */
-static const char * const _xmpp_log_level_name[4] = {"DEBUG", "INFO", "WARN", "ERROR"};
-static const xmpp_log_level_t _xmpp_default_logger_levels[] = {XMPP_LEVEL_DEBUG,
-							       XMPP_LEVEL_INFO,
-							       XMPP_LEVEL_WARN,
-							       XMPP_LEVEL_ERROR};
-
-
 static void
 logger(void * const userdata,
        const xmpp_log_level_t level,
        const char * const area,
        const char * const msg)
 {
-  xmpp_log_level_t filter_level = * (xmpp_log_level_t*)userdata;
-  if (level >= filter_level) {
-    fprintf(stderr, "%s: %s %s\n", area, _xmpp_log_level_name[level], msg);
-  }
-}
+  XsCtx *data = (XsCtx *) userdata;
+  GtkTextBuffer *buffer;
 
-static const xmpp_log_t log = {&logger, (void*)&_xmpp_default_logger_levels[XMPP_LEVEL_DEBUG]};
-
-static gpointer
-run_xmpp_stuff (gpointer userdata)
-{
-  XsCtx *ctx;
-  ctx = (XsCtx *) userdata;
-  ctx->xmpp = xmpp_ctx_new (NULL, &log);
-  connect (ctx);
-  xmpp_run (ctx->xmpp);
-  return GINT_TO_POINTER (1);
+  if (level >= data->log_level)
+    {
+      fprintf(stderr, "%s\n", msg);
+      buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (data->ui->receive));
+      gtk_text_buffer_insert_at_cursor (buffer, msg, -1);
+      gtk_text_buffer_insert_at_cursor (buffer, "\n", 1);
+    }
 }
 
 int
 main (int argc, char **argv)
 {
   XsCtx *ctx;
+  xmpp_log_t log;
+
   gtk_init (&argc, &argv);
   xmpp_initialize ();
 
@@ -427,6 +383,7 @@ main (int argc, char **argv)
   ctx->ui = g_slice_new (UiInfo);
   ctx->ui->toolbar = g_slice_new (ToolBar);
 
+  ctx->conn = NULL;
   ctx->jid_str = NULL;
   if (argc > 1)
     ctx->jid_str = g_strdup (argv[1]);
@@ -435,13 +392,41 @@ main (int argc, char **argv)
   if (argc > 2)
     ctx->passwd_str = g_strdup (argv[2]);
 
+  /* Setup log handler */
+  log.handler = &logger;
+  log.userdata = (void*) ctx;
+  ctx->log_level = XMPP_LEVEL_DEBUG;
+
+  /* Setup XMPP client */
+  ctx->xmpp = xmpp_ctx_new (NULL, &log);
+
+  /* Kick off the whole thing */
   setup_ui (ctx);
 
-  /* setting up signals */
-  g_signal_connect (ctx->ui->jid, "changed", G_CALLBACK (jid_changed), ctx);
-  g_signal_connect (ctx->ui->passwd, "changed", G_CALLBACK (passwd_changed), ctx);
+  while (running)
+    {
+      xmpp_run_once (ctx->xmpp, 1);
+      while (g_main_context_pending (NULL))
+        g_main_context_iteration (NULL, FALSE);
+    }
 
-  g_thread_new ("xmpp", run_xmpp_stuff, ctx);
-  gtk_main ();
+  xmpp_stop (ctx->xmpp);
+  xmpp_shutdown ();
+
+  if (ctx->jid_str)
+    {
+      g_free (ctx->jid_str);
+      ctx->jid_str = NULL;
+    }
+  if (ctx->passwd_str)
+    {
+      g_free (ctx->passwd_str);
+      ctx->passwd_str = NULL;
+    }
+  if (ctx->ui)
+    g_slice_free (UiInfo, ctx->ui);
+  if (ctx)
+    g_slice_free (XsCtx, ctx);
+
   return 0;
 }
